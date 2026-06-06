@@ -3,10 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Waschküche – Belegung</title>
+<title>Waschraum – Belegung</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root {
     --bg: #f4f1ea;
@@ -144,6 +145,14 @@
   .card.running .machine-glyph .drum { animation: spin 2.4s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  .picture .photo {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
   .countdown {
     position: absolute;
     inset: auto 0 0 0;
@@ -223,24 +232,24 @@
 </head>
 <body>
   <header>
-    <h1>Waschküche</h1>
-    <p>Belegung der Maschinen im Untergeschoss</p>
+    <h1>Waschraum</h1>
+    <p>Belegung der Waschmaschinen</p>
     <div class="clock" id="clock"></div>
   </header>
 
   <main class="grid" id="grid"></main>
 
   <footer>
-    Hinweis: Die Anzeige beruht auf Eingaben der Nachbarn – es gibt keinen Sensor an den Maschinen.<br>
-    Bitte Timer korrekt setzen und nach Gebrauch ggf. zurücksetzen. Danke! 🧺
+    Hinweis: Es besteht keine direkte Verbindung zu den Maschinen – die Timer müssen daher manuell gesetzt werden.<br>
+    Nach Ablauf des Timers wird die Maschine automatisch wieder als „Frei“ angezeigt. Bei früherem Ende bitte „Zurücksetzen“ nutzen. Danke! 🧺
   </footer>
 
 <script>
   // ---- Configuration: the three machines ----
   const MACHINES = [
-    { id: "m1", name: "Maschine 1" },
-    { id: "m2", name: "Maschine 2" },
-    { id: "dry", name: "Trockner" },
+    { id: "m1",  name: "Waschmaschine 1", photo: "images/maschine1.jpg" },
+    { id: "m2",  name: "Waschmaschine 2", photo: "images/maschine2.jpg" },
+    { id: "dry", name: "Trockner",        photo: "images/trockner.jpg" },
   ];
 
   const grid = document.getElementById("grid");
@@ -267,9 +276,15 @@
         <span class="dot"></span><span class="txt">Frei</span>
       </div>
       <div class="picture">
-        <div class="machine-glyph">
-          <div class="body"></div><div class="drum"></div><div class="knob"></div>
-        </div>
+        ${m.photo
+          ? `<img class="photo" src="${m.photo}" alt="${m.name}"
+                  onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+             <div class="machine-glyph" style="display:none;">
+               <div class="body"></div><div class="drum"></div><div class="knob"></div>
+             </div>`
+          : `<div class="machine-glyph">
+               <div class="body"></div><div class="drum"></div><div class="knob"></div>
+             </div>`}
         <div class="countdown" id="cd-${m.id}">00:00:00</div>
       </div>
       <div class="timer-set">
@@ -322,6 +337,7 @@
       return;
     }
     state[id].endsAt = Date.now() + totalMs;
+    state[id].clearedRemotely = false;
     saveState(id);   // <-- shared backend hook
     render();
   }
@@ -351,7 +367,10 @@
         txt.textContent = "Belegt";
         cd.textContent = `${pad(hh)}:${pad(mm)}:${pad(ss)}`;
       } else {
-        if (ends && ends <= now) { state[m.id].endsAt = null; saveState(m.id); }
+        if (ends && ends <= now) {
+          state[m.id].endsAt = null;
+          if (!state[m.id].clearedRemotely) { saveState(m.id); state[m.id].clearedRemotely = true; }
+        }
         card.classList.remove("running");
         status.className = "status free";
         txt.textContent = "Frei";
@@ -366,16 +385,54 @@
       " · " + pad(d.getHours()) + ":" + pad(d.getMinutes());
   }
 
-  // ===== Shared-backend hooks (no-ops in standalone version) =====
-  // Replace these two functions to sync across all neighbours (see guide).
-  function saveState(id) { /* standalone: nothing to do */ }
-  function loadState()   { /* standalone: nothing to do */ }
+  // ===== Shared backend: Supabase =====
+  const SUPABASE_URL = "https://zxikpukutmcxivtryxke.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_ROHEDYPbw6n6pwveGcdhJg_O1RdQQS8";
+  const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  // Write one machine's end time to the shared database
+  async function saveState(id) {
+    const endsAt = state[id].endsAt;
+    const { error } = await db
+      .from("machines")
+      .update({ ends_at: endsAt ? new Date(endsAt).toISOString() : null })
+      .eq("id", id);
+    if (error) console.error("Speichern fehlgeschlagen:", error);
+  }
+
+  // Read all machines from the database on page load
+  async function loadState() {
+    const { data, error } = await db.from("machines").select("id, ends_at");
+    if (error) { console.error("Laden fehlgeschlagen:", error); return; }
+    for (const row of data) {
+      if (state[row.id]) {
+        state[row.id].endsAt = row.ends_at ? new Date(row.ends_at).getTime() : null;
+      }
+    }
+    render();
+  }
+
+  // Listen for live changes from other neighbours and update instantly
+  function subscribeLive() {
+    db.channel("machines-changes")
+      .on("postgres_changes",
+          { event: "UPDATE", schema: "public", table: "machines" },
+          (payload) => {
+            const row = payload.new;
+            if (state[row.id]) {
+              state[row.id].endsAt = row.ends_at ? new Date(row.ends_at).getTime() : null;
+              render();
+            }
+          })
+      .subscribe();
+  }
 
   // ---- Init ----
   MACHINES.forEach(buildCard);
-  loadState();
   render();
   tickClock();
+  loadState();
+  subscribeLive();
   setInterval(render, 1000);
   setInterval(tickClock, 30000);
 </script>
