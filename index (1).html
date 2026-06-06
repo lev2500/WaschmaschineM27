@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Waschküche – Belegung</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4f1ea;
+    --ink: #1c2b33;
+    --card: #ffffff;
+    --teal: #1d5e74;
+    --teal-deep: #16485a;
+    --free: #2f7a4d;
+    --free-soft: #e4f1e8;
+    --busy: #b5482f;
+    --busy-soft: #f6e3dd;
+    --line: #d9d3c6;
+    --shadow: 0 2px 4px rgba(28,43,51,.06), 0 12px 28px rgba(28,43,51,.10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Outfit', sans-serif;
+    background:
+      radial-gradient(circle at 12% -10%, #e9f0ee 0%, transparent 45%),
+      radial-gradient(circle at 90% 0%, #f0e8df 0%, transparent 40%),
+      var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    padding: 28px 16px 60px;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    max-width: 1180px;
+    margin: 0 auto 30px;
+    text-align: center;
+  }
+  header h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: clamp(28px, 5vw, 44px);
+    letter-spacing: -.02em;
+  }
+  header p {
+    margin-top: 8px;
+    color: #5d6a70;
+    font-size: 15px;
+  }
+  .clock {
+    display: inline-block;
+    margin-top: 14px;
+    font-size: 13px;
+    letter-spacing: .04em;
+    color: #7a848a;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 5px 14px;
+    background: rgba(255,255,255,.6);
+  }
+  .grid {
+    max-width: 1180px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 22px;
+  }
+  @media (max-width: 880px) { .grid { grid-template-columns: 1fr; max-width: 460px; } }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    padding: 22px 20px 24px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .card .title {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 22px;
+    text-align: center;
+    letter-spacing: -.01em;
+  }
+  .status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 14px;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+    padding: 9px;
+    border-radius: 12px;
+    transition: all .3s ease;
+  }
+  .status .dot { width: 9px; height: 9px; border-radius: 50%; }
+  .status.free { background: var(--free-soft); color: var(--free); }
+  .status.free .dot { background: var(--free); box-shadow: 0 0 0 4px rgba(47,122,77,.18); }
+  .status.busy { background: var(--busy-soft); color: var(--busy); }
+  .status.busy .dot { background: var(--busy); box-shadow: 0 0 0 4px rgba(181,72,47,.18); }
+
+  .picture {
+    aspect-ratio: 1 / 1.05;
+    border-radius: 16px;
+    background:
+      linear-gradient(160deg, var(--teal) 0%, var(--teal-deep) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255,255,255,.92);
+    position: relative;
+    overflow: hidden;
+  }
+  /* simple washing-machine glyph drawn in CSS */
+  .machine-glyph { width: 58%; aspect-ratio: 1; position: relative; }
+  .machine-glyph .body {
+    position: absolute; inset: 0;
+    border: 4px solid rgba(255,255,255,.85);
+    border-radius: 14px;
+  }
+  .machine-glyph .drum {
+    position: absolute; inset: 22%;
+    border: 4px solid rgba(255,255,255,.85);
+    border-radius: 50%;
+  }
+  .machine-glyph .drum::after {
+    content: ""; position: absolute; inset: 26%;
+    border: 3px solid rgba(255,255,255,.55);
+    border-radius: 50%;
+  }
+  .machine-glyph .knob {
+    position: absolute; top: 9%; right: 12%;
+    width: 9px; height: 9px; border-radius: 50%;
+    background: rgba(255,255,255,.85);
+  }
+  .card.running .machine-glyph .drum { animation: spin 2.4s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .countdown {
+    position: absolute;
+    inset: auto 0 0 0;
+    background: rgba(0,0,0,.28);
+    backdrop-filter: blur(2px);
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+    font-size: 30px;
+    font-weight: 600;
+    letter-spacing: .02em;
+    padding: 10px;
+    text-align: center;
+    display: none;
+  }
+  .card.running .countdown { display: block; }
+
+  /* timer setter */
+  .timer-set { display: flex; flex-direction: column; gap: 10px; }
+  .timer-set .label { font-size: 12px; color: #7a848a; letter-spacing: .05em; text-transform: uppercase; text-align:center; }
+  .pickers { display: flex; gap: 10px; }
+  .picker {
+    flex: 1;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 8px 6px 6px;
+    text-align: center;
+    background: #fbfaf6;
+  }
+  .picker span { display:block; font-size: 11px; color:#8b949a; letter-spacing:.05em; }
+  .picker select {
+    width: 100%;
+    border: none;
+    background: transparent;
+    font-family: 'Outfit', sans-serif;
+    font-size: 26px;
+    font-weight: 600;
+    color: var(--ink);
+    text-align: center;
+    text-align-last: center;
+    cursor: pointer;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .card.running .timer-set { display: none; }
+
+  button {
+    font-family: 'Outfit', sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: .02em;
+    border: none;
+    border-radius: 12px;
+    padding: 14px;
+    cursor: pointer;
+    transition: transform .08s ease, filter .2s ease, background .2s ease;
+    color: #fff;
+  }
+  button:active { transform: translateY(1px) scale(.997); }
+  .btn-start { background: var(--teal); }
+  .btn-start:hover { filter: brightness(1.07); }
+  .btn-start:disabled { background: #b9c0c4; cursor: not-allowed; }
+  .btn-reset { background: var(--busy); display: none; }
+  .btn-reset:hover { filter: brightness(1.07); }
+  .card.running .btn-start { display: none; }
+  .card.running .btn-reset { display: block; }
+
+  footer {
+    max-width: 1180px;
+    margin: 34px auto 0;
+    text-align: center;
+    font-size: 12.5px;
+    color: #8b949a;
+    line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Waschküche</h1>
+    <p>Belegung der Maschinen im Untergeschoss</p>
+    <div class="clock" id="clock"></div>
+  </header>
+
+  <main class="grid" id="grid"></main>
+
+  <footer>
+    Hinweis: Die Anzeige beruht auf Eingaben der Nachbarn – es gibt keinen Sensor an den Maschinen.<br>
+    Bitte Timer korrekt setzen und nach Gebrauch ggf. zurücksetzen. Danke! 🧺
+  </footer>
+
+<script>
+  // ---- Configuration: the three machines ----
+  const MACHINES = [
+    { id: "m1", name: "Maschine 1" },
+    { id: "m2", name: "Maschine 2" },
+    { id: "dry", name: "Trockner" },
+  ];
+
+  const grid = document.getElementById("grid");
+
+  // Build hour (0–5) and minute (0,5,10,...55) options
+  const hourOpts = Array.from({length: 6}, (_, i) => i);
+  const minOpts  = Array.from({length: 12}, (_, i) => i * 5);
+
+  // In-memory state (replaced by shared backend later — see comments)
+  const state = {}; // { m1: { endsAt: <timestamp ms> | null } }
+
+  function pad(n) { return String(n).padStart(2, "0"); }
+
+  function buildCard(m) {
+    state[m.id] = { endsAt: null };
+
+    const card = document.createElement("section");
+    card.className = "card";
+    card.id = "card-" + m.id;
+
+    card.innerHTML = `
+      <div class="title">${m.name}</div>
+      <div class="status free" id="status-${m.id}">
+        <span class="dot"></span><span class="txt">Frei</span>
+      </div>
+      <div class="picture">
+        <div class="machine-glyph">
+          <div class="body"></div><div class="drum"></div><div class="knob"></div>
+        </div>
+        <div class="countdown" id="cd-${m.id}">00:00:00</div>
+      </div>
+      <div class="timer-set">
+        <div class="label">Dauer einstellen</div>
+        <div class="pickers">
+          <label class="picker"><span>Stunden</span>
+            <select id="h-${m.id}">
+              ${hourOpts.map(h => `<option value="${h}">${pad(h)}</option>`).join("")}
+            </select>
+          </label>
+          <label class="picker"><span>Minuten</span>
+            <select id="mi-${m.id}">
+              ${minOpts.map(mi => `<option value="${mi}" ${mi===30?"selected":""}>${pad(mi)}</option>`).join("")}
+            </select>
+          </label>
+        </div>
+      </div>
+      <button class="btn-start" id="start-${m.id}">Start</button>
+      <button class="btn-reset" id="reset-${m.id}">Zurücksetzen</button>
+    `;
+    grid.appendChild(card);
+
+    document.getElementById("start-" + m.id).addEventListener("click", () => startTimer(m.id));
+
+    const resetBtn = document.getElementById("reset-" + m.id);
+    let armed = false, armTimeout = null;
+    resetBtn.addEventListener("click", () => {
+      if (!armed) {
+        armed = true;
+        resetBtn.textContent = "Wirklich zurücksetzen?";
+        armTimeout = setTimeout(() => {
+          armed = false;
+          resetBtn.textContent = "Zurücksetzen";
+        }, 3000);
+        return;
+      }
+      clearTimeout(armTimeout);
+      armed = false;
+      resetBtn.textContent = "Zurücksetzen";
+      resetTimer(m.id);
+    });
+  }
+
+  function startTimer(id) {
+    const h  = parseInt(document.getElementById("h-" + id).value, 10);
+    const mi = parseInt(document.getElementById("mi-" + id).value, 10);
+    const totalMs = (h * 60 + mi) * 60 * 1000;
+    if (totalMs <= 0) {
+      alert("Bitte eine Dauer größer als 0 wählen.");
+      return;
+    }
+    state[id].endsAt = Date.now() + totalMs;
+    saveState(id);   // <-- shared backend hook
+    render();
+  }
+
+  function resetTimer(id) {
+    state[id].endsAt = null;
+    saveState(id);   // <-- shared backend hook
+    render();
+  }
+
+  function render() {
+    const now = Date.now();
+    for (const m of MACHINES) {
+      const card   = document.getElementById("card-" + m.id);
+      const status = document.getElementById("status-" + m.id);
+      const cd     = document.getElementById("cd-" + m.id);
+      const txt    = status.querySelector(".txt");
+      const ends   = state[m.id].endsAt;
+
+      if (ends && ends > now) {
+        const left = ends - now;
+        const hh = Math.floor(left / 3600000);
+        const mm = Math.floor((left % 3600000) / 60000);
+        const ss = Math.floor((left % 60000) / 1000);
+        card.classList.add("running");
+        status.className = "status busy";
+        txt.textContent = "Belegt";
+        cd.textContent = `${pad(hh)}:${pad(mm)}:${pad(ss)}`;
+      } else {
+        if (ends && ends <= now) { state[m.id].endsAt = null; saveState(m.id); }
+        card.classList.remove("running");
+        status.className = "status free";
+        txt.textContent = "Frei";
+      }
+    }
+  }
+
+  function tickClock() {
+    const d = new Date();
+    document.getElementById("clock").textContent =
+      d.toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long" }) +
+      " · " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+  }
+
+  // ===== Shared-backend hooks (no-ops in standalone version) =====
+  // Replace these two functions to sync across all neighbours (see guide).
+  function saveState(id) { /* standalone: nothing to do */ }
+  function loadState()   { /* standalone: nothing to do */ }
+
+  // ---- Init ----
+  MACHINES.forEach(buildCard);
+  loadState();
+  render();
+  tickClock();
+  setInterval(render, 1000);
+  setInterval(tickClock, 30000);
+</script>
+</body>
+</html>
